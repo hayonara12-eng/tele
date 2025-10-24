@@ -9,14 +9,18 @@ import httpx
 
 TOKEN: Final = os.getenv("BOT_TOKEN", "8411851385:AAGm6zy0sqygpHii6RSrsHGxgyLPYyuLpt8")
 ADMIN_CHAT_ID: Final = int((os.getenv("ADMIN_CHAT_ID") or "0"))
+HOMEPAGE_URL: Final = (os.getenv("HOMEPAGE_URL") or "").strip()
 
 # UI: 공통 인라인 메뉴
 def build_menu() -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton("코인구매", callback_data="BUY"), InlineKeyboardButton("코인판매", callback_data="SELL")],
         [InlineKeyboardButton("테더가격", callback_data="USDT_PRICE"), InlineKeyboardButton("달러가격", callback_data="USD_PRICE")],
-        [InlineKeyboardButton("도움말", callback_data="HELP")],
     ]
+    if HOMEPAGE_URL:
+        keyboard.append([InlineKeyboardButton("도움말", callback_data="HELP"), InlineKeyboardButton("홈페이지", url=HOMEPAGE_URL)])
+    else:
+        keyboard.append([InlineKeyboardButton("도움말", callback_data="HELP"), InlineKeyboardButton("홈페이지", callback_data="HOMEPAGE")])
     return InlineKeyboardMarkup(keyboard)
 
 MENU_PROMPT = "안녕하세요 ! usdt korea_bot 입니다. \n명령어를 선택하세요: )"
@@ -297,6 +301,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=query.message.chat.id, text=f"달러 환율: 1 USD = ₩{rate:,.0f}\n조회시각(KST): {ts}", reply_markup=build_menu())
         else:
             await context.bot.send_message(chat_id=query.message.chat.id, text="달러 환율을 가져오지 못했습니다. 잠시 후 다시 시도해주세요.", reply_markup=build_menu())
+    elif data == "HOMEPAGE":
+        await context.bot.send_message(chat_id=query.message.chat.id, text="홈페이지가 아직 설정되지 않았습니다. 나중에 다시 시도해주세요.", reply_markup=build_menu())
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     print(f'Update {update} caused error {context.error}')
