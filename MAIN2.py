@@ -1,5 +1,6 @@
 from typing import Final
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
 import asyncio
 import json
@@ -29,19 +30,12 @@ HELP_TEXT = "아직준비중입니다. 좋은 모습으로 뵙겠습니다"
 MENUPANEL_TEXT = (
     "저희 팀은 텔레그램 기반으로 안전하고 빠른 코인 P2P 거래를 제공하는 기업입니다. "
     "처음코인을 구매하시고 판매하시는 분들도 쉽게 코인을 사고팔 수 있도록 직관적인 챗봇 UI와 "
-    "신뢰 기반의 에스크로 프로세스를 결합했습니다."
+    "신뢰 기반의 에스크로 프로세스를 결합했습니다.\n\n"
+    "관리자에게 연락을 주시면 빠른 문의가 가능합니다: "
+    "<a href=\"https://t.me/cmd0E\">관리자</a>"
 )
 
-# BUY/SELL 폼 안내 텍스트
-FORM_PROMPT = (
-    "아래 양식에 맞춰 보내주세요.\n\n"
-    "- 거래유형: {TYPE}\n"
-    "- 희망 수량(USDT): \n"
-    "- 희망 가격(KRW/USDT): \n"
-    "- 결제수단/은행: \n"
-    "- 기타 요청사항: \n\n"
-    "예) 거래유형: 코인구매\n희망 수량: 5,000 USDT\n희망 가격: 1,350 KRW/USDT\n결제수단: 카카오뱅크\n기타: 오늘 오후 3시 이전 처리希望"
-)
+# (구) 텍스트 기반 폼 안내는 사용하지 않음
 
 # ===== 선택형 폼(Wizard) 유틸 =====
 def wizard_reset(context: ContextTypes.DEFAULT_TYPE):
@@ -108,12 +102,7 @@ def send_payment_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     ])
     return context.bot.send_message(chat_id=chat_id, text="결제수단/은행을 선택하세요.", reply_markup=kb)
 
-def send_notes_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("메모 건너뛰기", callback_data="WZ_NOTES:SKIP")],
-        [InlineKeyboardButton("취소", callback_data="WZ_CANCEL")],
-    ])
-    return context.bot.send_message(chat_id=chat_id, text="기타 요청사항이 있으면 메시지로 입력하거나, 건너뛰기를 누르세요.", reply_markup=kb)
+# 메모 단계는 사용하지 않음
 
 def send_confirm_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user, w: dict):
     summary = wizard_summary_text(user, w)
@@ -318,27 +307,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_confirm_menu(context, update.message.chat.id, update.message.from_user, wizard_get(context))
             return
 
-    # 폼 응답 대기 상태라면 우선 처리
-    if context.user_data.get("awaiting_form") and update.message and (update.message.text or update.message.caption):
-        form_state = context.user_data.pop("awaiting_form", None)
-        user = update.message.from_user
-        uid = user.id if user else "?"
-        name = user.full_name if user else "?"
-        uname = (user.username or "") if user else ""
-        handle = f"@{uname}" if uname else f"id={uid}"
-        form_type = "코인구매" if (form_state or {}).get("type") == "BUY" else "코인판매"
-        body = (update.message.text or update.message.caption or "").strip()
-        # 관리자에게 포워딩
-        header = f"[신규 요청] {name} ({handle}) — {form_type}"
-        try:
-            await notify_admin(context, f"{header}\n\n{body}")
-        except Exception:
-            # notify_admin 내부에서 실패해도 이어서 사용자 응답 처리
-            pass
-        # 사용자에게 접수 안내 및 메뉴 재표시
-        await update.message.reply_text("요청 내역을 접수했습니다. 관리자가 빠르게 확인하겠습니다.", reply_markup=build_menu())
-        return
-
     # 어떤 말을 하더라도 처음엔 메뉴를 보여줌. 이미 보여줬다면 다시 보내지 않음.
     text = (update.message.text or "")
     if "메뉴" in text:
@@ -403,8 +371,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wizard_start(context, data)
         await send_qty_menu(context, query.message.chat.id)
     elif data == "HELP":
-        # 도움말: 새 메시지로 메뉴판 전송 + 메뉴 UI 재표시
-        await context.bot.send_message(chat_id=query.message.chat.id, text=MENUPANEL_TEXT)
+        # 도움말: 안내 + 연락처(HTML 링크) 전송 후 메뉴 UI 재표시
+        await context.bot.send_message(chat_id=query.message.chat.id, text=MENUPANEL_TEXT, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         await context.bot.send_message(chat_id=query.message.chat.id, text=MENU_PROMPT, reply_markup=build_menu())
     elif data == "USDT_PRICE":
         session: httpx.AsyncClient = await ensure_http_session(context.application)
