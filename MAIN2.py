@@ -117,11 +117,12 @@ def send_notes_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
 
 def send_confirm_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user, w: dict):
     summary = wizard_summary_text(user, w)
+    tlabel = "코인구매" if w.get("type") == "BUY" else "코인판매"
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("확인 및 전송", callback_data="WZ_CONFIRM:SEND")],
         [InlineKeyboardButton("취소", callback_data="WZ_CANCEL")],
     ])
-    return context.bot.send_message(chat_id=chat_id, text=f"다음 내용으로 관리자에게 전송합니다:\n\n{summary}", reply_markup=kb)
+    return context.bot.send_message(chat_id=chat_id, text=f"다음 내용으로 {tlabel}를 서버에 전송합니다:\n\n{summary}", reply_markup=kb)
 
 # 테더 가격 조회 (Bithumb: USDT_KRW) - KRW만 반환
 async def fetch_tether_krw(session: httpx.AsyncClient):
@@ -313,11 +314,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_price_menu(context, update.message.chat.id)
             return
         if step == "price_custom":
-            wizard_set(context, price=msg, step="notes_custom")
-            await send_notes_menu(context, update.message.chat.id)
-            return
-        if step == "notes_custom":
-            wizard_set(context, notes=msg, step="confirm")
+            wizard_set(context, price=msg, step="confirm")
             await send_confirm_menu(context, update.message.chat.id, update.message.from_user, wizard_get(context))
             return
 
@@ -455,16 +452,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session: httpx.AsyncClient = await ensure_http_session(context.application)
             krw = await fetch_tether_krw(session)
             sel = f"시장가 (~₩{krw:,.0f})" if krw else "시장가"
-            wizard_set(context, price=sel, step="notes_custom")
-            await send_notes_menu(context, query.message.chat.id)
-    elif data.startswith("WZ_NOTES:"):
-        _, val = data.split(":", 1)
-        if val == "SKIP":
-            wizard_set(context, notes="(없음)", step="confirm")
+            wizard_set(context, price=sel, step="confirm")
             await send_confirm_menu(context, query.message.chat.id, query.from_user, wizard_get(context))
-        else:
-            wizard_set(context, step="notes_custom")
-            await query.edit_message_text("기타 요청사항을 입력해 주세요.")
+    elif data.startswith("WZ_NOTES:"):
+        # Notes step removed: ignore and go to confirm if encountered
+        wizard_set(context, step="confirm")
+        await send_confirm_menu(context, query.message.chat.id, query.from_user, wizard_get(context))
     elif data.startswith("WZ_CONFIRM:"):
         w = wizard_get(context)
         user = query.from_user
