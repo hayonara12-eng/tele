@@ -313,7 +313,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_price_menu(context, update.message.chat.id)
             return
         if step == "price_custom":
-            wizard_set(context, price=msg, step="notes")
+            wizard_set(context, price=msg, step="notes_custom")
             await send_notes_menu(context, update.message.chat.id)
             return
         if step == "notes_custom":
@@ -455,7 +455,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session: httpx.AsyncClient = await ensure_http_session(context.application)
             krw = await fetch_tether_krw(session)
             sel = f"시장가 (~₩{krw:,.0f})" if krw else "시장가"
-            wizard_set(context, price=sel, step="notes")
+            wizard_set(context, price=sel, step="notes_custom")
             await send_notes_menu(context, query.message.chat.id)
     elif data.startswith("WZ_NOTES:"):
         _, val = data.split(":", 1)
