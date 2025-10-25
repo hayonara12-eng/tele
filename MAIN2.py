@@ -43,6 +43,80 @@ FORM_PROMPT = (
     "예) 거래유형: 코인구매\n희망 수량: 5,000 USDT\n희망 가격: 1,350 KRW/USDT\n결제수단: 카카오뱅크\n기타: 오늘 오후 3시 이전 처리希望"
 )
 
+# ===== 선택형 폼(Wizard) 유틸 =====
+def wizard_reset(context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("wizard", None)
+
+def wizard_start(context: ContextTypes.DEFAULT_TYPE, kind: str):
+    context.user_data["wizard"] = {"type": kind, "step": "qty"}
+
+def wizard_get(context: ContextTypes.DEFAULT_TYPE):
+    return context.user_data.get("wizard") or {}
+
+def wizard_set(context: ContextTypes.DEFAULT_TYPE, **kwargs):
+    w = wizard_get(context)
+    w.update(kwargs)
+    context.user_data["wizard"] = w
+    return w
+
+def wizard_summary_text(user, w: dict) -> str:
+    uname = (user.username or "") if user else ""
+    handle = f"@{uname}" if uname else f"id={user.id if user else '?'}"
+    who = f"{user.full_name if user else '?'} ({handle})"
+    tlabel = "코인구매" if w.get("type") == "BUY" else "코인판매"
+    qty = w.get("qty") or "-"
+    price = w.get("price") or "-"
+    pay = w.get("pay") or "-"
+    notes = w.get("notes") or "-"
+    return (
+        f"요청자: {who}\n"
+        f"거래유형: {tlabel}\n"
+        f"희망 수량(USDT): {qty}\n"
+        f"희망 가격(KRW/USDT): {price}\n"
+        f"결제수단/은행: {pay}\n"
+        f"기타 요청사항: {notes}"
+    )
+
+def send_qty_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("1,000", callback_data="WZ_QTY:1000"), InlineKeyboardButton("5,000", callback_data="WZ_QTY:5000")],
+        [InlineKeyboardButton("10,000", callback_data="WZ_QTY:10000"), InlineKeyboardButton("직접 입력", callback_data="WZ_QTY:CUSTOM")],
+        [InlineKeyboardButton("취소", callback_data="WZ_CANCEL")],
+    ])
+    return context.bot.send_message(chat_id=chat_id, text="희망 수량(USDT)을 선택하세요.", reply_markup=kb)
+
+def send_price_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("시장가(현재 시세)", callback_data="WZ_PRICE:MKT")],
+        [InlineKeyboardButton("직접 입력", callback_data="WZ_PRICE:CUSTOM")],
+        [InlineKeyboardButton("취소", callback_data="WZ_CANCEL")],
+    ])
+    return context.bot.send_message(chat_id=chat_id, text="희망 가격(KRW/USDT)을 선택하세요.", reply_markup=kb)
+
+def send_payment_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("카카오뱅크", callback_data="WZ_PAY:KAKAO"), InlineKeyboardButton("토스뱅크", callback_data="WZ_PAY:TOSS")],
+        [InlineKeyboardButton("국민", callback_data="WZ_PAY:KB"), InlineKeyboardButton("신한", callback_data="WZ_PAY:SHINHAN")],
+        [InlineKeyboardButton("직접 입력", callback_data="WZ_PAY:CUSTOM")],
+        [InlineKeyboardButton("취소", callback_data="WZ_CANCEL")],
+    ])
+    return context.bot.send_message(chat_id=chat_id, text="결제수단/은행을 선택하세요.", reply_markup=kb)
+
+def send_notes_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("메모 건너뛰기", callback_data="WZ_NOTES:SKIP")],
+        [InlineKeyboardButton("취소", callback_data="WZ_CANCEL")],
+    ])
+    return context.bot.send_message(chat_id=chat_id, text="기타 요청사항이 있으면 메시지로 입력하거나, 건너뛰기를 누르세요.", reply_markup=kb)
+
+def send_confirm_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user, w: dict):
+    summary = wizard_summary_text(user, w)
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("확인 및 전송", callback_data="WZ_CONFIRM:SEND")],
+        [InlineKeyboardButton("취소", callback_data="WZ_CANCEL")],
+    ])
+    return context.bot.send_message(chat_id=chat_id, text=f"다음 내용으로 관리자에게 전송합니다:\n\n{summary}", reply_markup=kb)
+
 # 테더 가격 조회 (Bithumb: USDT_KRW) - KRW만 반환
 async def fetch_tether_krw(session: httpx.AsyncClient):
     url = "https://api.bithumb.com/public/ticker/USDT_KRW"
@@ -223,6 +297,28 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(MENU_PROMPT, reply_markup=build_menu())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Wizard 커스텀 입력 처리 우선
+    w = wizard_get(context)
+    if w and update.message and (update.message.text or update.message.caption):
+        msg = (update.message.text or update.message.caption or "").strip()
+        step = w.get("step")
+        if step == "qty_custom":
+            wizard_set(context, qty=msg, step="price")
+            await send_price_menu(context, update.message.chat.id)
+            return
+        if step == "price_custom":
+            wizard_set(context, price=msg, step="pay")
+            await send_payment_menu(context, update.message.chat.id)
+            return
+        if step == "pay_custom":
+            wizard_set(context, pay=msg, step="notes")
+            await send_notes_menu(context, update.message.chat.id)
+            return
+        if step == "notes_custom":
+            wizard_set(context, notes=msg, step="confirm")
+            await send_confirm_menu(context, update.message.chat.id, update.message.from_user, wizard_get(context))
+            return
+
     # 폼 응답 대기 상태라면 우선 처리
     if context.user_data.get("awaiting_form") and update.message and (update.message.text or update.message.caption):
         form_state = context.user_data.pop("awaiting_form", None)
@@ -304,13 +400,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("관리자가 연락 드리겠습니다", reply_markup=build_menu())
         except Exception:
             await context.bot.send_message(chat_id=query.message.chat.id, text="관리자가 연락 드리겠습니다", reply_markup=build_menu())
-        # 폼 안내 전송 및 사용자 상태 진입
-        form_type_label = "코인구매" if data == "BUY" else "코인판매"
-        try:
-            await context.bot.send_message(chat_id=query.message.chat.id, text=FORM_PROMPT.format(TYPE=form_type_label))
-        except Exception:
-            pass
-        context.user_data["awaiting_form"] = {"type": data, "ts": kst_now_str()}
+        # 선택형 폼 시작 (Wizard)
+        wizard_start(context, data)
+        await send_qty_menu(context, query.message.chat.id)
     elif data == "HELP":
         # 도움말: 새 메시지로 메뉴판 전송 + 메뉴 UI 재표시
         await context.bot.send_message(chat_id=query.message.chat.id, text=MENUPANEL_TEXT)
@@ -342,6 +434,58 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=query.message.chat.id, text="달러 환율을 가져오지 못했습니다. 잠시 후 다시 시도해주세요.", reply_markup=build_menu())
     elif data == "HOMEPAGE":
         await context.bot.send_message(chat_id=query.message.chat.id, text="홈페이지가 아직 설정되지 않았습니다. 나중에 다시 시도해주세요.", reply_markup=build_menu())
+    # ===== Wizard callbacks =====
+    elif data.startswith("WZ_QTY:"):
+        _, val = data.split(":", 1)
+        if val == "CUSTOM":
+            wizard_set(context, step="qty_custom")
+            await query.edit_message_text("희망 수량(USDT)을 숫자로 입력해 주세요.")
+        else:
+            wizard_set(context, qty=val, step="price")
+            await send_price_menu(context, query.message.chat.id)
+    elif data.startswith("WZ_PRICE:"):
+        _, val = data.split(":", 1)
+        if val == "CUSTOM":
+            wizard_set(context, step="price_custom")
+            await query.edit_message_text("희망 가격(KRW/USDT)을 숫자로 입력해 주세요.")
+        else:
+            # 시장가 선택 시 현재 시세 표기
+            session: httpx.AsyncClient = await ensure_http_session(context.application)
+            krw = await fetch_tether_krw(session)
+            sel = f"시장가 (~₩{krw:,.0f})" if krw else "시장가"
+            wizard_set(context, price=sel, step="pay")
+            await send_payment_menu(context, query.message.chat.id)
+    elif data.startswith("WZ_PAY:"):
+        _, val = data.split(":", 1)
+        if val == "CUSTOM":
+            wizard_set(context, step="pay_custom")
+            await query.edit_message_text("결제수단/은행을 입력해 주세요.")
+        else:
+            mapping = {"KAKAO":"카카오뱅크","TOSS":"토스뱅크","KB":"국민","SHINHAN":"신한"}
+            wizard_set(context, pay=mapping.get(val, val), step="notes")
+            await send_notes_menu(context, query.message.chat.id)
+    elif data.startswith("WZ_NOTES:"):
+        _, val = data.split(":", 1)
+        if val == "SKIP":
+            wizard_set(context, notes="(없음)", step="confirm")
+            await send_confirm_menu(context, query.message.chat.id, query.from_user, wizard_get(context))
+        else:
+            wizard_set(context, step="notes_custom")
+            await query.edit_message_text("기타 요청사항을 입력해 주세요.")
+    elif data.startswith("WZ_CONFIRM:"):
+        w = wizard_get(context)
+        user = query.from_user
+        header = f"[신규 요청] {user.full_name if user else '?'} ({'@'+user.username if (user and user.username) else f'id={user.id if user else '?'}'}) — {'코인구매' if w.get('type')=='BUY' else '코인판매'}"
+        summary = wizard_summary_text(user, w)
+        try:
+            await notify_admin(context, f"{header}\n\n{summary}")
+        except Exception:
+            pass
+        wizard_reset(context)
+        await context.bot.send_message(chat_id=query.message.chat.id, text="요청 내역을 접수했습니다. 관리자가 빠르게 확인하겠습니다.", reply_markup=build_menu())
+    elif data == "WZ_CANCEL":
+        wizard_reset(context)
+        await context.bot.send_message(chat_id=query.message.chat.id, text="요청이 취소되었습니다.", reply_markup=build_menu())
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     print(f'Update {update} caused error {context.error}')
