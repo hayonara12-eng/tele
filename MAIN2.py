@@ -26,12 +26,11 @@ def build_menu() -> InlineKeyboardMarkup:
 
 MENU_PROMPT = "안녕하세요 ! usdt korea_bot 입니다. \n명령어를 선택하세요: )"
 HELP_TEXT = "아직준비중입니다. 좋은 모습으로 뵙겠습니다"
-MENUPANEL_TEXT = """
-안녕하세요 ! 현재 작업이 진행중인상태입니다.
-제가 원하는것은 이 봇을 통해해사람들이 불법자금에 대한 의심없이
-코인을 P2P로
-거래할수 있도록 하는것입니다.
-"""
+MENUPANEL_TEXT = (
+    "저희 팀은 텔레그램 기반으로 안전하고 빠른 코인 P2P 거래를 제공하는 기업입니다. "
+    "처음코인을 구매하시고 판매하시는 분들도 쉽게 코인을 사고팔 수 있도록 직관적인 챗봇 UI와 "
+    "신뢰 기반의 에스크로 프로세스를 결합했습니다."
+)
 
 # 테더 가격 조회 (Bithumb: USDT_KRW) - KRW만 반환
 async def fetch_tether_krw(session: httpx.AsyncClient):
