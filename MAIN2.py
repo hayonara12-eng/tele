@@ -83,13 +83,21 @@ def send_qty_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     ])
     return context.bot.send_message(chat_id=chat_id, text="희망 수량(USDT)을 선택하세요.", reply_markup=kb)
 
-def send_price_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+async def send_price_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("시장가(현재 시세)", callback_data="WZ_PRICE:MKT")],
         [InlineKeyboardButton("직접 입력", callback_data="WZ_PRICE:CUSTOM")],
         [InlineKeyboardButton("취소", callback_data="WZ_CANCEL")],
     ])
-    return context.bot.send_message(chat_id=chat_id, text="희망 가격(KRW/USDT)을 선택하세요.", reply_markup=kb)
+    # 현재 시세 정보를 함께 표시
+    try:
+        session: httpx.AsyncClient = await ensure_http_session(context.application)
+        krw = await fetch_tether_krw(session)
+    except Exception:
+        krw = None
+    price_line = f"\n현재 시세: ₩{krw:,.0f}" if krw else ""
+    text = "희망 가격(KRW/USDT)을 선택하세요." + price_line
+    return await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
 
 def send_payment_menu(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     kb = InlineKeyboardMarkup([
