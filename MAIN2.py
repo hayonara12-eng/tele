@@ -32,6 +32,17 @@ MENUPANEL_TEXT = (
     "신뢰 기반의 에스크로 프로세스를 결합했습니다."
 )
 
+# BUY/SELL 폼 안내 텍스트
+FORM_PROMPT = (
+    "아래 양식에 맞춰 보내주세요.\n\n"
+    "- 거래유형: {TYPE}\n"
+    "- 희망 수량(USDT): \n"
+    "- 희망 가격(KRW/USDT): \n"
+    "- 결제수단/은행: \n"
+    "- 기타 요청사항: \n\n"
+    "예) 거래유형: 코인구매\n희망 수량: 5,000 USDT\n희망 가격: 1,350 KRW/USDT\n결제수단: 카카오뱅크\n기타: 오늘 오후 3시 이전 처리希望"
+)
+
 # 테더 가격 조회 (Bithumb: USDT_KRW) - KRW만 반환
 async def fetch_tether_krw(session: httpx.AsyncClient):
     url = "https://api.bithumb.com/public/ticker/USDT_KRW"
@@ -212,6 +223,27 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(MENU_PROMPT, reply_markup=build_menu())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 폼 응답 대기 상태라면 우선 처리
+    if context.user_data.get("awaiting_form") and update.message and (update.message.text or update.message.caption):
+        form_state = context.user_data.pop("awaiting_form", None)
+        user = update.message.from_user
+        uid = user.id if user else "?"
+        name = user.full_name if user else "?"
+        uname = (user.username or "") if user else ""
+        handle = f"@{uname}" if uname else f"id={uid}"
+        form_type = "코인구매" if (form_state or {}).get("type") == "BUY" else "코인판매"
+        body = (update.message.text or update.message.caption or "").strip()
+        # 관리자에게 포워딩
+        header = f"[신규 요청] {name} ({handle}) — {form_type}"
+        try:
+            await notify_admin(context, f"{header}\n\n{body}")
+        except Exception:
+            # notify_admin 내부에서 실패해도 이어서 사용자 응답 처리
+            pass
+        # 사용자에게 접수 안내 및 메뉴 재표시
+        await update.message.reply_text("요청 내역을 접수했습니다. 관리자가 빠르게 확인하겠습니다.", reply_markup=build_menu())
+        return
+
     # 어떤 말을 하더라도 처음엔 메뉴를 보여줌. 이미 보여줬다면 다시 보내지 않음.
     text = (update.message.text or "")
     if "메뉴" in text:
@@ -272,6 +304,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("관리자가 연락 드리겠습니다", reply_markup=build_menu())
         except Exception:
             await context.bot.send_message(chat_id=query.message.chat.id, text="관리자가 연락 드리겠습니다", reply_markup=build_menu())
+        # 폼 안내 전송 및 사용자 상태 진입
+        form_type_label = "코인구매" if data == "BUY" else "코인판매"
+        try:
+            await context.bot.send_message(chat_id=query.message.chat.id, text=FORM_PROMPT.format(TYPE=form_type_label))
+        except Exception:
+            pass
+        context.user_data["awaiting_form"] = {"type": data, "ts": kst_now_str()}
     elif data == "HELP":
         # 도움말: 새 메시지로 메뉴판 전송 + 메뉴 UI 재표시
         await context.bot.send_message(chat_id=query.message.chat.id, text=MENUPANEL_TEXT)
