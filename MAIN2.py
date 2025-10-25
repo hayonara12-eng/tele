@@ -9,7 +9,7 @@ import httpx
 
 TOKEN: Final = os.getenv("BOT_TOKEN", "8411851385:AAGm6zy0sqygpHii6RSrsHGxgyLPYyuLpt8")
 ADMIN_CHAT_ID: Final = int((os.getenv("ADMIN_CHAT_ID") or "0"))
-HOMEPAGE_URL: Final = (os.getenv("HOMEPAGE_URL") or "https://korea-p2p.onrender.com/").strip()
+HOMEPAGE_URL: Final = "https://korea-p2p.onrender.com/"
 
 # UI: 공통 인라인 메뉴
 def build_menu() -> InlineKeyboardMarkup:
@@ -17,10 +17,8 @@ def build_menu() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("코인구매", callback_data="BUY"), InlineKeyboardButton("코인판매", callback_data="SELL")],
         [InlineKeyboardButton("테더가격", callback_data="USDT_PRICE"), InlineKeyboardButton("달러가격", callback_data="USD_PRICE")],
     ]
-    if HOMEPAGE_URL:
-        keyboard.append([InlineKeyboardButton("도움말", callback_data="HELP"), InlineKeyboardButton("홈페이지", url=HOMEPAGE_URL)])
-    else:
-        keyboard.append([InlineKeyboardButton("도움말", callback_data="HELP"), InlineKeyboardButton("홈페이지", callback_data="HOMEPAGE")])
+    # 항상 URL 버튼으로 홈페이지 연결
+    keyboard.append([InlineKeyboardButton("도움말", callback_data="HELP"), InlineKeyboardButton("홈페이지", url=HOMEPAGE_URL)])
     return InlineKeyboardMarkup(keyboard)
 
 MENU_PROMPT = "안녕하세요 ! usdt korea_bot 입니다. \n명령어를 선택하세요: )"
