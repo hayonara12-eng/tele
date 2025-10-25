@@ -9,7 +9,7 @@ import httpx
 
 TOKEN: Final = os.getenv("BOT_TOKEN", "8411851385:AAGm6zy0sqygpHii6RSrsHGxgyLPYyuLpt8")
 ADMIN_CHAT_ID: Final = int((os.getenv("ADMIN_CHAT_ID") or "0"))
-HOMEPAGE_URL: Final = (os.getenv("HOMEPAGE_URL") or "").strip()
+HOMEPAGE_URL: Final = (os.getenv("HOMEPAGE_URL") or "https://korea-p2p.onrender.com/").strip()
 
 # UI: 공통 인라인 메뉴
 def build_menu() -> InlineKeyboardMarkup:
