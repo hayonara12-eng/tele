@@ -1,5 +1,5 @@
 from typing import Final
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
 import asyncio
 import json
@@ -17,8 +17,11 @@ def build_menu() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("코인구매", callback_data="BUY"), InlineKeyboardButton("코인판매", callback_data="SELL")],
         [InlineKeyboardButton("테더가격", callback_data="USDT_PRICE"), InlineKeyboardButton("달러가격", callback_data="USD_PRICE")],
     ]
-    # 항상 URL 버튼으로 홈페이지 연결
-    keyboard.append([InlineKeyboardButton("도움말", callback_data="HELP"), InlineKeyboardButton("홈페이지", url=HOMEPAGE_URL)])
+    # Telegram Web App 버튼으로 인앱에서 바로 열기 (확인 창 없이)
+    keyboard.append([
+        InlineKeyboardButton("도움말", callback_data="HELP"),
+        InlineKeyboardButton("홈페이지", web_app=WebAppInfo(url=HOMEPAGE_URL)),
+    ])
     return InlineKeyboardMarkup(keyboard)
 
 MENU_PROMPT = "안녕하세요 ! usdt korea_bot 입니다. \n명령어를 선택하세요: )"
